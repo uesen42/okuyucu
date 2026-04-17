@@ -4,25 +4,30 @@ import { Plus, Book, Clock, Settings, Upload, Share2, LogOut } from 'lucide-reac
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
-  const [libraryCode, setLibraryCode] = useState(localStorage.getItem('libraryCode') || '');
-  const [tempCode, setTempCode] = useState('');
+  const [password, setPassword] = useState(localStorage.getItem('appPassword') || '');
+  const [tempPass, setTempPass] = useState('');
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const masterPassword = import.meta.env.VITE_APP_PASSWORD;
+
   useEffect(() => {
-    if (libraryCode) {
+    if (password === masterPassword) {
       fetchBooks();
     }
-  }, [libraryCode]);
+  }, [password]);
 
   const fetchBooks = async () => {
     setLoading(true);
+    // Use the password (or a derivative) as the library_code to keep data segmented but private
+    const libraryId = `lib_${masterPassword}`; 
     const { data, error } = await supabase
       .from('books')
       .select('*')
-      .eq('library_code', libraryCode)
+      .eq('library_code', libraryId)
       .order('last_read', { ascending: false });
 
     if (error) console.error('Error fetching books:', error);
@@ -30,44 +35,45 @@ const Dashboard = () => {
     setLoading(false);
   };
 
-  const handleJoinLibrary = () => {
-    if (tempCode.trim()) {
-      localStorage.setItem('libraryCode', tempCode.trim());
-      setLibraryCode(tempCode.trim());
+  const handleLogin = () => {
+    if (tempPass === masterPassword) {
+      localStorage.setItem('appPassword', tempPass);
+      setPassword(tempPass);
+      setError('');
+    } else {
+      setError('Hatalı şifre! Lütfen tekrar deneyin.');
     }
   };
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
-    if (!file || !libraryCode) return;
+    if (!file || password !== masterPassword) return;
 
     setUploading(true);
+    const libraryId = `lib_${masterPassword}`;
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${libraryCode}/${fileName}`;
+    const filePath = `${libraryId}/${fileName}`;
 
     try {
-      // 1. Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('pdfs')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // 2. Get Public URL
       const { data: { publicUrl } } = supabase.storage
         .from('pdfs')
         .getPublicUrl(filePath);
 
-      // 3. Save to Database
       const { error: dbError } = await supabase
         .from('books')
         .insert([{
-          library_code: libraryCode,
+          library_code: libraryId,
           title: file.name.replace('.pdf', ''),
           file_url: publicUrl,
           storage_path: filePath,
-          total_pages: 0 // Will be updated when opened
+          total_pages: 0
         }]);
 
       if (dbError) throw dbError;
@@ -80,24 +86,28 @@ const Dashboard = () => {
     }
   };
 
-  if (!libraryCode) {
+  if (password !== masterPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-primary">
         <div className="glass p-8 w-full max-w-md animate-fade-in text-center">
-          <Book className="w-16 h-16 text-accent-primary mx-auto mb-6" />
-          <h1 className="text-3xl font-bold mb-2">PDF Takip</h1>
-          <p className="text-text-secondary mb-8">Kütüphanenize erişmek için bir kod girin.</p>
+          <div className="w-16 h-16 bg-accent-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Book className="w-8 h-8 text-accent-primary" />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">Umut PDF</h1>
+          <p className="text-text-secondary mb-8">Devam etmek için ana şifrenizi girin.</p>
           
           <div className="flex flex-col gap-4">
             <input 
-              type="text" 
-              placeholder="Kütüphane Kodu (örn: umut-okuma)"
-              className="bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-accent-primary"
-              value={tempCode}
-              onChange={(e) => setTempCode(e.target.value)}
+              type="password" 
+              placeholder="Şifreyi Girin"
+              className="bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-accent-primary text-center tracking-widest"
+              value={tempPass}
+              onChange={(e) => setTempPass(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
             />
-            <button className="btn-primary w-full justify-center py-4" onClick={handleJoinLibrary}>
-              Kütüphaneye Gir
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <button className="btn-primary w-full justify-center py-4" onClick={handleLogin}>
+              Giriş Yap
             </button>
           </div>
         </div>
@@ -107,14 +117,10 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen p-6 md:p-12 animate-fade-in">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
           <h1 className="text-4xl font-bold mb-2">Kütüphanem</h1>
-          <div className="flex items-center gap-2 text-text-secondary glass px-3 py-1 text-sm bg-white/5">
-            <Share2 size={14} />
-            <span>Kod: <strong>{libraryCode}</strong></span>
-          </div>
+          <p className="text-text-secondary">Hoş geldin! Okumaya devam et.</p>
         </div>
         
         <div className="flex gap-4">
@@ -124,15 +130,14 @@ const Dashboard = () => {
             <input type="file" className="hidden" accept=".pdf" onChange={handleFileUpload} disabled={uploading} />
           </label>
           <button className="btn-secondary" onClick={() => {
-            localStorage.removeItem('libraryCode');
-            setLibraryCode('');
+            localStorage.removeItem('appPassword');
+            setPassword('');
           }}>
             <LogOut size={20} />
           </button>
         </div>
       </div>
 
-      {/* Grid */}
       {loading ? (
         <div className="text-center py-20 text-text-secondary">Yükleniyor...</div>
       ) : books.length === 0 ? (
