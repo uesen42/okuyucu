@@ -125,53 +125,52 @@ const Reader = () => {
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-500 ${themeStyles[theme]}`}>
       {/* Top Bar */}
-      <div className={`glass h-16 px-4 md:px-6 flex items-center justify-between sticky top-0 z-10 border-none rounded-none ${theme === 'dark' ? 'border-b border-white/5' : 'bg-white/50 border-b border-black/5 shadow-sm'}`}>
-        <div className="flex items-center gap-2 md:gap-4">
-          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/5 rounded-full transition-colors" onClick={() => navigate('/')}>
-            <X size={20} />
+      <div className={`glass h-auto min-h-[64px] py-3 px-4 md:px-6 flex flex-wrap gap-4 items-center justify-between sticky top-0 z-10 border-none rounded-none shadow-sm ${theme === 'dark' ? 'bg-black/60 border-b border-white/10' : 'bg-white/80 border-b border-black/5'}`}>
+        <div className="flex items-center gap-3">
+          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/10 rounded-full transition-colors shrink-0" onClick={() => navigate('/')}>
+            <X size={24} />
           </button>
-          <h2 className="font-medium text-xs md:text-base max-w-[120px] md:max-w-xs truncate">{book?.title}</h2>
+          <h2 className="font-semibold text-sm md:text-lg max-w-[150px] md:max-w-md truncate drop-shadow-sm">{book?.title}</h2>
         </div>
 
-          <div className="flex items-center gap-2 md:gap-4">
-            
-            <button className="p-2 hover:bg-black/10 hover:dark:bg-white/5 rounded-full transition-colors hidden md:block" onClick={toggleTheme}>
-              {theme === 'dark' ? <Moon size={20} /> : theme === 'sepia' ? <Coffee size={20} /> : <Sun size={20} />}
-            </button>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/10 rounded-full transition-colors hidden sm:block" onClick={toggleTheme}>
+            {theme === 'dark' ? <Moon size={22} /> : theme === 'sepia' ? <Coffee size={22} /> : <Sun size={22} />}
+          </button>
 
-            <button className="p-2 hover:bg-black/10 hover:dark:bg-white/5 rounded-full transition-colors hidden md:block" onClick={toggleFullscreen}>
-              <Maximize2 size={20} />
-            </button>
+          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/10 rounded-full transition-colors hidden sm:block" onClick={toggleFullscreen}>
+            <Maximize2 size={22} />
+          </button>
 
-            <button 
-              className={`p-2 rounded-lg transition-all flex items-center gap-2 ${isNotesOpen ? 'bg-accent-primary text-white shadow-lg' : 'hover:bg-black/10 hover:dark:bg-white/5 opacity-80'}`}
-              onClick={() => setIsNotesOpen(!isNotesOpen)}
-            >
-              <StickyNote size={20} />
-              <span className="hidden md:inline text-sm font-medium">Notlar</span>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/5'}`}>
+            <button className="p-1 hover:text-accent-primary transition-colors" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
+              <ZoomOut size={18} />
             </button>
-
-            <div className={`flex items-center gap-1 md:gap-2 px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-white/5' : 'bg-black/5'}`}>
-            <button className="p-1 hover:text-accent-primary" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
-              <ZoomOut size={16} />
-            </button>
-            <span className="text-[10px] md:text-xs font-mono w-8 text-center">{Math.round(scale * 100)}%</span>
-            <button className="p-1 hover:text-accent-primary" onClick={() => setScale(s => Math.min(2, s + 0.1))}>
-              <ZoomIn size={16} />
+            <span className="text-xs font-mono w-9 text-center font-semibold">{Math.round(scale * 100)}%</span>
+            <button className="p-1 hover:text-accent-primary transition-colors" onClick={() => setScale(s => Math.min(2, s + 0.1))}>
+              <ZoomIn size={18} />
             </button>
           </div>
           
-          <form onSubmit={handleJump} className="hidden lg:flex items-center gap-2 text-sm opacity-80">
-            <Search size={16} />
+          <form onSubmit={handleJump} className="hidden lg:flex items-center gap-2 text-sm opacity-90 glass px-3 py-1.5 rounded-xl">
+            <Search size={18} />
             <input 
               type="number" 
               placeholder={pageNumber.toString()}
-              className={`w-14 px-2 py-1 rounded text-center outline-none ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}
+              className={`w-16 px-2 py-1 rounded text-center outline-none font-bold ${theme === 'dark' ? 'bg-black/50 text-white placeholder-white/50' : 'bg-white/50 text-black placeholder-black/50'}`}
               value={jumpStr}
               onChange={e => setJumpStr(e.target.value)}
             />
-            <span>/ {numPages}</span>
+            <span className="font-medium">/ {numPages}</span>
           </form>
+
+          <button 
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 font-semibold shadow-sm border ${isNotesOpen ? 'bg-accent-primary text-white border-accent-primary shadow-accent-primary/20' : theme === 'dark' ? 'bg-white/10 border-white/10 hover:bg-white/20' : 'bg-black/5 border-black/10 hover:bg-black/10'}`}
+            onClick={() => setIsNotesOpen(!isNotesOpen)}
+          >
+            <StickyNote size={18} />
+            <span className="hidden sm:inline">Notlar</span>
+          </button>
         </div>
       </div>
 
@@ -196,44 +195,45 @@ const Reader = () => {
         </div>
       </div>
 
-      {/* Persistent Bottom Bar (iPad Friendly) */}
-      <div className={`h-16 md:h-20 backdrop-blur-xl border-t flex items-center justify-between sticky bottom-0 z-10 px-4 md:px-6 ${theme === 'dark' ? 'bg-black/80 border-white/5' : 'bg-white/80 border-black/5'}`}>
+      {/* Persistent Bottom Bar */}
+      <div className={`transition-colors duration-500 min-h-[80px] py-4 backdrop-blur-2xl border-t flex flex-col sm:flex-row items-center justify-between sticky bottom-0 z-10 px-4 md:px-8 gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] ${theme === 'dark' ? 'bg-black/70 border-white/10' : 'bg-white/90 border-black/10'}`}>
+        
         <button 
-          className="btn-secondary px-3 py-2 md:px-4 flex items-center gap-2 disabled:opacity-30 border-none bg-transparent" 
+          className={`flex-1 sm:flex-none btn-secondary px-6 py-3 flex justify-center items-center gap-2 rounded-xl transition-all border ${theme === 'dark' ? 'hover:bg-white/10 border-white/10 text-white' : 'hover:bg-black/5 border-black/10 text-black'} disabled:opacity-30`} 
           disabled={pageNumber <= 1}
           onClick={() => changePage(-1)}
         >
-          <ChevronLeft size={24} />
-          <span className="hidden md:inline font-semibold">Önceki</span>
+          <ChevronLeft size={22} className={theme === 'dark' ? 'text-accent-secondary' : 'text-accent-primary'} />
+          <span className="font-semibold tracking-wide">Önceki</span>
         </button>
 
-        <div className="flex flex-col items-center gap-1 w-1/2">
-          <div className="text-xs md:text-sm font-medium opacity-80">Sayfa {pageNumber} / {numPages}</div>
-          <div className={`w-full max-w-[200px] md:max-w-xs progress-bar-container h-1.5 md:h-2 rounded-full ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
+        <div className="flex flex-col items-center gap-2 w-full sm:w-1/3">
+          <div className="text-xs md:text-sm font-bold tracking-widest uppercase opacity-70">Sayfa {pageNumber} / {numPages}</div>
+          <div className={`w-full progress-bar-container h-2 rounded-full overflow-hidden shadow-inner ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
             <div 
-              className="progress-bar-fill h-full rounded-full" 
+              className="progress-bar-fill h-full rounded-full transition-all duration-300 ease-out bg-gradient-to-r from-accent-primary to-accent-secondary" 
               style={{ width: `${(pageNumber / (numPages || 1)) * 100}%` }}
             />
           </div>
         </div>
 
         <button 
-          className="btn-secondary px-3 py-2 md:px-4 flex items-center gap-2 disabled:opacity-30 border-none bg-transparent" 
+          className={`flex-1 sm:flex-none btn-secondary px-6 py-3 flex justify-center items-center gap-2 rounded-xl transition-all border ${theme === 'dark' ? 'hover:bg-white/10 border-white/10 text-white' : 'hover:bg-black/5 border-black/10 text-black'} disabled:opacity-30`} 
           disabled={pageNumber >= numPages}
           onClick={() => changePage(1)}
         >
-          <span className="hidden md:inline font-semibold">Sonraki</span>
-          <ChevronRight size={24} />
+          <span className="font-semibold tracking-wide">Sonraki</span>
+          <ChevronRight size={22} className={theme === 'dark' ? 'text-accent-secondary' : 'text-accent-primary'} />
         </button>
       </div>
 
       {/* Mobile Tools Overlay */}
-      <div className="md:hidden fixed top-20 right-4 flex flex-col gap-2 pointer-events-auto z-20">
-         <button className="p-2 rounded-full glass bg-black/40 text-white shadow" onClick={toggleTheme}>
-            {theme === 'dark' ? <Moon size={16} /> : theme === 'sepia' ? <Coffee size={16} /> : <Sun size={16} />}
+      <div className="sm:hidden fixed top-24 right-4 flex flex-col gap-3 pointer-events-auto z-20">
+         <button className="p-3 rounded-2xl glass bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-xl hover:scale-105 transition-transform" onClick={toggleTheme}>
+            {theme === 'dark' ? <Moon size={20} /> : theme === 'sepia' ? <Coffee size={20} /> : <Sun size={20} />}
          </button>
-         <button className="p-2 rounded-full glass bg-black/40 text-white shadow" onClick={toggleFullscreen}>
-            <Maximize2 size={16} />
+         <button className="p-3 rounded-2xl glass bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-xl hover:scale-105 transition-transform" onClick={toggleFullscreen}>
+            <Maximize2 size={20} />
          </button>
       </div>
 
