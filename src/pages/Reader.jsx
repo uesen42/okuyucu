@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { supabase } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, RotateCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, RotateCw, StickyNote } from 'lucide-react';
+import NotesDrawer from '../components/NotesDrawer';
 
 // Setup worker for react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -15,6 +16,7 @@ const Reader = () => {
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
   const [loading, setLoading] = useState(true);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
 
   useEffect(() => {
     fetchBook();
@@ -87,8 +89,16 @@ const Reader = () => {
           <h2 className="font-medium text-sm md:text-base max-w-[200px] md:max-w-md truncate">{book?.title}</h2>
         </div>
 
-        <div className="flex items-center gap-2 md:gap-6">
-          <div className="flex items-center gap-2 glass px-3 py-1 bg-white/5">
+          <div className="flex items-center gap-2 md:gap-6">
+            <button 
+              className={`p-2 rounded-lg transition-all flex items-center gap-2 ${isNotesOpen ? 'bg-accent-primary text-white shadow-lg' : 'hover:bg-white/5 text-text-secondary'}`}
+              onClick={() => setIsNotesOpen(!isNotesOpen)}
+            >
+              <StickyNote size={20} />
+              <span className="hidden md:inline text-sm font-medium">Notlar</span>
+            </button>
+
+            <div className="flex items-center gap-2 glass px-3 py-1 bg-white/5">
             <button className="p-1 hover:text-accent-primary" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
               <ZoomOut size={18} />
             </button>
@@ -159,6 +169,14 @@ const Reader = () => {
       <div className="md:hidden fixed top-20 right-6 glass px-3 py-1 text-xs text-text-secondary pointer-events-none">
         {pageNumber} / {numPages}
       </div>
+
+      {/* Notes Drawer */}
+      <NotesDrawer 
+        isOpen={isNotesOpen} 
+        onClose={() => setIsNotesOpen(false)} 
+        bookId={bookId} 
+        pageNumber={pageNumber} 
+      />
     </div>
   );
 };
