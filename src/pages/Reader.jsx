@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { supabase } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, Sun, Moon, Coffee, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, Sun, Moon, Coffee, Search, StickyNote } from 'lucide-react';
 import NotesDrawer from '../components/NotesDrawer';
 import { useWindowSize } from '../hooks/useWindowSize';
 
