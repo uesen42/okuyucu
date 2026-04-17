@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { supabase } from '../lib/supabase';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, Sun, Moon, Coffee, Search, StickyNote } from 'lucide-react';
 import NotesDrawer from '../components/NotesDrawer';
-import { useWindowSize } from '../hooks/useWindowSize';
 
-// Setup worker for react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const Reader = () => {
@@ -20,237 +18,239 @@ const Reader = () => {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('readerTheme') || 'dark');
   const [jumpStr, setJumpStr] = useState('');
-  const windowSize = useWindowSize();
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(600);
 
   useEffect(() => {
     fetchBook();
+    const updateWidth = () => {
+      const padding = window.innerWidth < 768 ? 32 : 80;
+      setContainerWidth(Math.min(Math.max(window.innerWidth - padding, 280), 960));
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
   }, [bookId]);
 
   const fetchBook = async () => {
     const { data, error } = await supabase
-      .from('books')
-      .select('*')
-      .eq('id', bookId)
-      .single();
-
-    if (error) {
-      console.error('Error fetching book:', error);
-      navigate('/');
-    } else {
-      setBook(data);
-      setPageNumber(data.current_page || 1);
-      setLoading(false);
-    }
+      .from('books').select('*').eq('id', bookId).single();
+    if (error) { console.error(error); navigate('/'); }
+    else { setBook(data); setPageNumber(data.current_page || 1); setLoading(false); }
   };
 
   const syncProgress = async (newPage) => {
-    const { error } = await supabase
-      .from('books')
-      .update({ 
-        current_page: newPage ,
-        last_read: new Date().toISOString()
-      })
-      .eq('id', bookId);
-
-    if (error) console.error('Error syncing progress:', error);
+    await supabase.from('books').update({
+      current_page: newPage,
+      last_read: new Date().toISOString()
+    }).eq('id', bookId);
   };
 
-  // Debounced sync
   useEffect(() => {
     if (!loading && book) {
-      const timer = setTimeout(() => {
-        syncProgress(pageNumber);
-      }, 1000);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => syncProgress(pageNumber), 1000);
+      return () => clearTimeout(t);
     }
   }, [pageNumber, book, loading]);
 
   const onDocumentLoadSuccess = ({ numPages }) => {
     setNumPages(numPages);
-    // Update total pages in DB if not set
-    if (book && book.total_pages === 0) {
+    if (book && book.total_pages === 0)
       supabase.from('books').update({ total_pages: numPages }).eq('id', bookId).then();
-    }
   };
 
   const changePage = (offset) => {
-    setPageNumber(prevPageNumber => {
-      const next = prevPageNumber + offset;
-      return Math.min(Math.max(1, next), numPages);
-    });
+    setPageNumber(p => Math.min(Math.max(1, p + offset), numPages));
     setJumpStr('');
   };
 
   const handleJump = (e) => {
     e.preventDefault();
-    const target = parseInt(jumpStr);
-    if (!isNaN(target) && target >= 1 && target <= numPages) {
-      setPageNumber(target);
-    }
+    const t = parseInt(jumpStr);
+    if (!isNaN(t) && t >= 1 && t <= numPages) setPageNumber(t);
     setJumpStr('');
   };
 
   const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'sepia' : theme === 'sepia' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('readerTheme', nextTheme);
+    const next = theme === 'dark' ? 'sepia' : theme === 'sepia' ? 'light' : 'dark';
+    setTheme(next);
+    localStorage.setItem('readerTheme', next);
   };
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
-    }
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    else document.exitFullscreen().catch(() => {});
   };
 
-  // Theme styles map
-  const themeStyles = {
-    dark: 'bg-[#05060f] text-white',
-    light: 'bg-gray-100 text-gray-900',
-    sepia: 'bg-[#f4ecd8] text-[#5b4636]'
-  };
+  const bgColor = theme === 'dark' ? '#05060f' : theme === 'sepia' ? '#f4ecd8' : '#f1f5f9';
+  const textColor = theme === 'dark' ? '#f8fafc' : theme === 'sepia' ? '#5b4636' : '#1e293b';
+  const barBg = theme === 'dark' ? 'rgba(5,6,15,0.92)' : theme === 'sepia' ? 'rgba(244,236,216,0.92)' : 'rgba(241,245,249,0.92)';
+  const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const controlBg = theme === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
 
-  const getContainerWidth = () => {
-    // Leave some padding based on screen size
-    const padding = windowSize.width < 768 ? 32 : 64; 
-    return Math.min(Math.max(windowSize.width - padding, 300), 1000); 
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-text-secondary">Kitap yükleniyor...</div>;
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#05060f', color: '#94a3b8' }}>
+      Kitap yükleniyor...
+    </div>
+  );
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-500 ${themeStyles[theme]}`}>
-      {/* Top Bar */}
-      <div className={`glass h-auto min-h-[64px] py-3 px-4 md:px-6 flex flex-wrap gap-4 items-center justify-between sticky top-0 z-10 border-none rounded-none shadow-sm ${theme === 'dark' ? 'bg-black/60 border-b border-white/10' : 'bg-white/80 border-b border-black/5'}`}>
-        <div className="flex items-center gap-3">
-          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/10 rounded-full transition-colors shrink-0" onClick={() => navigate('/')}>
-            <X size={24} />
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: bgColor, color: textColor, transition: 'background 0.4s, color 0.4s' }}>
+
+      {/* ── TOP BAR ── */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 20,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
+        padding: '10px 16px',
+        background: barBg, backdropFilter: 'blur(16px)',
+        borderBottom: `1px solid ${borderColor}`,
+      }}>
+        {/* Left: Back + Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: '1 1 150px' }}>
+          <button onClick={() => navigate('/')} style={iconBtnStyle}>
+            <X size={20} />
           </button>
-          <h2 className="font-semibold text-sm md:text-lg max-w-[150px] md:max-w-md truncate drop-shadow-sm">{book?.title}</h2>
+          <span style={{ fontWeight: 600, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+            {book?.title}
+          </span>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/10 rounded-full transition-colors hidden sm:block" onClick={toggleTheme}>
-            {theme === 'dark' ? <Moon size={22} /> : theme === 'sepia' ? <Coffee size={22} /> : <Sun size={22} />}
-          </button>
-
-          <button className="p-2 hover:bg-black/10 hover:dark:bg-white/10 rounded-full transition-colors hidden sm:block" onClick={toggleFullscreen}>
-            <Maximize2 size={22} />
-          </button>
-
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/5'}`}>
-            <button className="p-1 hover:text-accent-primary transition-colors" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
-              <ZoomOut size={18} />
-            </button>
-            <span className="text-xs font-mono w-9 text-center font-semibold">{Math.round(scale * 100)}%</span>
-            <button className="p-1 hover:text-accent-primary transition-colors" onClick={() => setScale(s => Math.min(2, s + 0.1))}>
-              <ZoomIn size={18} />
-            </button>
+        {/* Right: Tools */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', flex: '0 0 auto' }}>
+          {/* Zoom */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: controlBg, borderRadius: '10px', padding: '4px 8px' }}>
+            <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} style={iconBtnStyle}><ZoomOut size={16} /></button>
+            <span style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', minWidth: '36px', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+            <button onClick={() => setScale(s => Math.min(2.5, s + 0.1))} style={iconBtnStyle}><ZoomIn size={16} /></button>
           </div>
-          
-          <form onSubmit={handleJump} className="hidden lg:flex items-center gap-2 text-sm opacity-90 glass px-3 py-1.5 rounded-xl">
-            <Search size={18} />
-            <input 
-              type="number" 
-              placeholder={pageNumber.toString()}
-              className={`w-16 px-2 py-1 rounded text-center outline-none font-bold ${theme === 'dark' ? 'bg-black/50 text-white placeholder-white/50' : 'bg-white/50 text-black placeholder-black/50'}`}
+
+          {/* Jump to page */}
+          <form onSubmit={handleJump} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: controlBg, borderRadius: '10px', padding: '4px 8px' }}>
+            <Search size={14} style={{ opacity: 0.6 }} />
+            <input
+              type="number"
               value={jumpStr}
               onChange={e => setJumpStr(e.target.value)}
+              placeholder={String(pageNumber)}
+              style={{
+                width: '44px', background: 'transparent', border: 'none', outline: 'none',
+                color: textColor, fontSize: '13px', fontWeight: 700, textAlign: 'center'
+              }}
             />
-            <span className="font-medium">/ {numPages}</span>
+            <span style={{ fontSize: '12px', opacity: 0.5 }}>/ {numPages}</span>
           </form>
 
-          <button 
-            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 font-semibold shadow-sm border ${isNotesOpen ? 'bg-accent-primary text-white border-accent-primary shadow-accent-primary/20' : theme === 'dark' ? 'bg-white/10 border-white/10 hover:bg-white/20' : 'bg-black/5 border-black/10 hover:bg-black/10'}`}
+          {/* Theme */}
+          <button onClick={toggleTheme} style={iconBtnStyle} title="Tema Değiştir">
+            {theme === 'dark' ? <Moon size={18} /> : theme === 'sepia' ? <Coffee size={18} /> : <Sun size={18} />}
+          </button>
+
+          {/* Fullscreen */}
+          <button onClick={toggleFullscreen} style={iconBtnStyle} title="Tam Ekran">
+            <Maximize2 size={18} />
+          </button>
+
+          {/* Notes */}
+          <button
             onClick={() => setIsNotesOpen(!isNotesOpen)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+              fontWeight: 600, fontSize: '13px',
+              background: isNotesOpen ? 'linear-gradient(135deg, #6366f1, #a855f7)' : controlBg,
+              color: isNotesOpen ? 'white' : textColor,
+              transition: 'all 0.2s',
+            }}
           >
-            <StickyNote size={18} />
-            <span className="hidden sm:inline">Notlar</span>
+            <StickyNote size={16} />
+            <span>Notlar</span>
           </button>
         </div>
       </div>
 
-      {/* Reader Area */}
-      <div className="flex-1 overflow-auto p-2 md:p-6 flex justify-center items-start">
-        <div className={`transition-all duration-300 ${theme === 'dark' ? 'shadow-2xl shadow-black/80' : 'shadow-xl shadow-black/20'}`}>
+      {/* ── PDF AREA ── */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 16px' }}>
+        <div style={{ boxShadow: theme === 'dark' ? '0 8px 48px rgba(0,0,0,0.7)' : '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '4px', overflow: 'hidden' }}>
           <Document
             file={book?.file_url}
             onLoadSuccess={onDocumentLoadSuccess}
-            loading={<div className="opacity-50 py-20 text-center">Sayfalar oluşturuluyor...</div>}
-            error={<div className="text-red-500 py-20 text-center font-bold">PDF yüklenemedi. Lütfen dosyayı kontrol edin.</div>}
+            loading={<div style={{ padding: '40px 20px', color: '#94a3b8', textAlign: 'center' }}>PDF yükleniyor...</div>}
+            error={<div style={{ padding: '40px 20px', color: '#ef4444', textAlign: 'center', fontWeight: 600 }}>PDF yüklenemedi.</div>}
           >
-            <Page 
-              pageNumber={pageNumber} 
-              scale={scale} 
-              width={windowSize.width ? getContainerWidth() : undefined}
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              width={containerWidth}
               renderTextLayer={false}
               renderAnnotationLayer={false}
-              className="animate-fade-in"
             />
           </Document>
         </div>
       </div>
 
-      {/* Persistent Bottom Bar */}
-      <div className={`transition-colors duration-500 min-h-[80px] py-4 backdrop-blur-2xl border-t flex flex-col sm:flex-row items-center justify-between sticky bottom-0 z-10 px-4 md:px-8 gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] ${theme === 'dark' ? 'bg-black/70 border-white/10' : 'bg-white/90 border-black/10'}`}>
-        
-        <button 
-          className={`flex-1 sm:flex-none btn-secondary px-6 py-3 flex justify-center items-center gap-2 rounded-xl transition-all border ${theme === 'dark' ? 'hover:bg-white/10 border-white/10 text-white' : 'hover:bg-black/5 border-black/10 text-black'} disabled:opacity-30`} 
-          disabled={pageNumber <= 1}
+      {/* ── BOTTOM BAR ── */}
+      <div style={{
+        position: 'sticky', bottom: 0, zIndex: 20,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+        padding: '12px 20px',
+        background: barBg, backdropFilter: 'blur(16px)',
+        borderTop: `1px solid ${borderColor}`,
+      }}>
+        <button
           onClick={() => changePage(-1)}
+          disabled={pageNumber <= 1}
+          style={{ ...navBtnStyle, opacity: pageNumber <= 1 ? 0.3 : 1, background: controlBg, color: textColor }}
         >
-          <ChevronLeft size={22} className={theme === 'dark' ? 'text-accent-secondary' : 'text-accent-primary'} />
-          <span className="font-semibold tracking-wide">Önceki</span>
+          <ChevronLeft size={20} />
+          <span style={{ fontSize: '14px', fontWeight: 600 }}>Önceki</span>
         </button>
 
-        <div className="flex flex-col items-center gap-2 w-full sm:w-1/3">
-          <div className="text-xs md:text-sm font-bold tracking-widest uppercase opacity-70">Sayfa {pageNumber} / {numPages}</div>
-          <div className={`w-full progress-bar-container h-2 rounded-full overflow-hidden shadow-inner ${theme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`}>
-            <div 
-              className="progress-bar-fill h-full rounded-full transition-all duration-300 ease-out bg-gradient-to-r from-accent-primary to-accent-secondary" 
-              style={{ width: `${(pageNumber / (numPages || 1)) * 100}%` }}
-            />
+        <div style={{ flex: 1, maxWidth: '280px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.6, marginBottom: '6px', letterSpacing: '0.05em' }}>
+            SAYFA {pageNumber} / {numPages}
+          </div>
+          <div style={{ height: '6px', background: 'rgba(128,128,128,0.2)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${(pageNumber / (numPages || 1)) * 100}%`,
+              background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+              borderRadius: '3px',
+              transition: 'width 0.4s ease'
+            }} />
           </div>
         </div>
 
-        <button 
-          className={`flex-1 sm:flex-none btn-secondary px-6 py-3 flex justify-center items-center gap-2 rounded-xl transition-all border ${theme === 'dark' ? 'hover:bg-white/10 border-white/10 text-white' : 'hover:bg-black/5 border-black/10 text-black'} disabled:opacity-30`} 
-          disabled={pageNumber >= numPages}
+        <button
           onClick={() => changePage(1)}
+          disabled={pageNumber >= numPages}
+          style={{ ...navBtnStyle, opacity: pageNumber >= numPages ? 0.3 : 1, background: controlBg, color: textColor }}
         >
-          <span className="font-semibold tracking-wide">Sonraki</span>
-          <ChevronRight size={22} className={theme === 'dark' ? 'text-accent-secondary' : 'text-accent-primary'} />
+          <span style={{ fontSize: '14px', fontWeight: 600 }}>Sonraki</span>
+          <ChevronRight size={20} />
         </button>
       </div>
 
-      {/* Mobile Tools Overlay */}
-      <div className="sm:hidden fixed top-24 right-4 flex flex-col gap-3 pointer-events-auto z-20">
-         <button className="p-3 rounded-2xl glass bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-xl hover:scale-105 transition-transform" onClick={toggleTheme}>
-            {theme === 'dark' ? <Moon size={20} /> : theme === 'sepia' ? <Coffee size={20} /> : <Sun size={20} />}
-         </button>
-         <button className="p-3 rounded-2xl glass bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-xl hover:scale-105 transition-transform" onClick={toggleFullscreen}>
-            <Maximize2 size={20} />
-         </button>
-      </div>
-
-      {/* Mobile Page Indicator (Overlay) */}
-      <div className="md:hidden fixed top-20 right-6 glass px-3 py-1 text-xs text-text-secondary pointer-events-none">
-        {pageNumber} / {numPages}
-      </div>
-
       {/* Notes Drawer */}
-      <NotesDrawer 
-        isOpen={isNotesOpen} 
-        onClose={() => setIsNotesOpen(false)} 
-        bookId={bookId} 
-        pageNumber={pageNumber} 
+      <NotesDrawer
+        isOpen={isNotesOpen}
+        onClose={() => setIsNotesOpen(false)}
+        bookId={bookId}
+        pageNumber={pageNumber}
       />
     </div>
   );
+};
+
+const iconBtnStyle = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: 'inherit', padding: '6px', borderRadius: '8px',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  opacity: 0.8, transition: 'opacity 0.2s',
+};
+
+const navBtnStyle = {
+  display: 'flex', alignItems: 'center', gap: '6px',
+  padding: '10px 18px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+  transition: 'all 0.2s', fontFamily: 'inherit',
 };
 
 export default Reader;
