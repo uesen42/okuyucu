@@ -145,7 +145,7 @@ const Reader = () => {
       .select('drawing_data')
       .eq('book_id', bookId)
       .eq('page_number', pageNumber)
-      .single();
+      .maybeSingle();
     setDrawingData(data?.drawing_data || null);
   };
 
@@ -391,32 +391,42 @@ const Reader = () => {
           <Document
             file={book?.file_url}
             onLoadSuccess={onDocumentLoadSuccess}
-            loading={<div style={{ padding: '60px', color: '#64748b' }}>PDF Hazırlanıyor...</div>}
+            loading={<div style={{ padding: '40px', textAlign: 'center' }}>Yükleniyor...</div>}
           >
-            <div style={{ position: 'relative' }}>
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                width={containerWidth}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                onRenderSuccess={(page) => {
-                  // Get actual rendered dimensions
-                  const viewport = page.getViewport({ scale: 1 });
-                  setPageDimensions({ width: viewport.width, height: viewport.height });
-                }}
-              />
-              <DrawingLayer
+            <div ref={containerRef} style={{ ...styles.canvasWrapper, cursor: isDrawingMode ? 'crosshair' : 'default' }}>
+              <Page 
+                pageNumber={pageNumber} 
                 width={containerWidth * scale}
-                height={(containerWidth * scale) * (pageDimensions.height / pageDimensions.width)}
-                isActive={isDrawingMode}
-                color={brushColor}
-                brushSize={isEraser ? brushSize * 4 : brushSize}
-                isEraser={isEraser}
-                initialData={drawingData}
-                onSave={saveDrawing}
+                renderTextLayer={true}
+                renderAnnotationLayer={true}
+                onLoadSuccess={(page) => setPageDimensions({ width: page.width, height: page.height })}
               />
+              
+              {/* Handwriting Overlay */}
+              {numPages > 0 && pageDimensions.width > 0 && (
+                <DrawingLayer
+                  width={containerWidth * scale}
+                  height={(containerWidth * scale) * (pageDimensions.height / pageDimensions.width)}
+                  isActive={isDrawingMode}
+                  color={brushColor}
+                  brushSize={isEraser ? brushSize * 4 : brushSize}
+                  isEraser={isEraser}
+                  initialData={drawingData}
+                  onSave={saveDrawing}
+                />
+              )}
             </div>
+
+            {/* Sidebar moved inside Document to provide PDF context */}
+            <ReaderSidebar 
+              isOpen={isSidebarOpen} 
+              onClose={() => setIsSidebarOpen(false)} 
+              numPages={numPages}
+              onJump={(p) => setPageNumber(p)}
+              bookId={bookId}
+              containerWidth={containerWidth}
+              theme={theme}
+            />
           </Document>
         </div>
       </div>
@@ -457,16 +467,6 @@ const Reader = () => {
       </div>
 
       <NotesDrawer isOpen={isNotesOpen} onClose={() => setIsNotesOpen(false)} bookId={bookId} pageNumber={pageNumber} />
-      
-      <ReaderSidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        numPages={numPages}
-        onJump={(p) => setPageNumber(p)}
-        bookId={bookId}
-        containerWidth={containerWidth}
-        theme={theme}
-      />
     </div>
   );
 };
