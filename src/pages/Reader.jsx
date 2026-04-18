@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { supabase } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, Sun, Moon, Coffee, Search, StickyNote } from 'lucide-react';
+import { 
+  ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, Sun, Moon, 
+  Coffee, Search, StickyNote, Pencil, Eraser, Trash2, Palette 
+} from 'lucide-react';
 import NotesDrawer from '../components/NotesDrawer';
+import DrawingLayer from '../components/DrawingLayer';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -19,6 +23,16 @@ const Reader = () => {
   const [theme, setTheme] = useState(localStorage.getItem('readerTheme') || 'dark');
   const [jumpStr, setJumpStr] = useState('');
   const [containerWidth, setContainerWidth] = useState(600);
+  const [pageDimensions, setPageDimensions] = useState({ width: 600, height: 848 });
+
+  // Drawing States
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [brushColor, setBrushColor] = useState('#6366f1');
+  const [brushSize, setBrushSize] = useState(3);
+  const [isEraser, setIsEraser] = useState(false);
+  const [drawingData, setDrawingData] = useState(null);
+
+  const colors = ['#6366f1', '#f43f5e', '#10b981', '#fbbf24', '#f8fafc', '#000000'];
 
   useEffect(() => {
     fetchBook();
@@ -31,6 +45,12 @@ const Reader = () => {
     return () => window.removeEventListener('resize', updateWidth);
   }, [bookId]);
 
+  useEffect(() => {
+    if (bookId && pageNumber) {
+      fetchDrawingData();
+    }
+  }, [bookId, pageNumber]);
+
   const fetchBook = async () => {
     const { data, error } = await supabase
       .from('books').select('*').eq('id', bookId).single();
@@ -38,11 +58,30 @@ const Reader = () => {
     else { setBook(data); setPageNumber(data.current_page || 1); setLoading(false); }
   };
 
+  const fetchDrawingData = async () => {
+    const { data } = await supabase
+      .from('notes')
+      .select('drawing_data')
+      .eq('book_id', bookId)
+      .eq('page_number', pageNumber)
+      .single();
+    setDrawingData(data?.drawing_data || null);
+  };
+
   const syncProgress = async (newPage) => {
     await supabase.from('books').update({
       current_page: newPage,
       last_read: new Date().toISOString()
     }).eq('id', bookId);
+  };
+
+  const saveDrawing = async (newData) => {
+    await supabase.from('notes').upsert({
+      book_id: bookId,
+      page_number: pageNumber,
+      drawing_data: newData,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'book_id, page_number' });
   };
 
   useEffect(() => {
@@ -81,153 +120,192 @@ const Reader = () => {
     else document.exitFullscreen().catch(() => {});
   };
 
+  // Styles
   const bgColor = theme === 'dark' ? '#05060f' : theme === 'sepia' ? '#f4ecd8' : '#f1f5f9';
   const textColor = theme === 'dark' ? '#f8fafc' : theme === 'sepia' ? '#5b4636' : '#1e293b';
-  const barBg = theme === 'dark' ? 'rgba(5,6,15,0.92)' : theme === 'sepia' ? 'rgba(244,236,216,0.92)' : 'rgba(241,245,249,0.92)';
-  const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const barBg = theme === 'dark' ? 'rgba(5,6,15,0.95)' : theme === 'sepia' ? 'rgba(244,236,216,0.95)' : 'rgba(241,245,249,0.95)';
+  const borderColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
   const controlBg = theme === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#05060f', color: '#94a3b8' }}>
-      Kitap yükleniyor...
-    </div>
-  );
+  const iconBtnStyle = {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: 'inherit', padding: '8px', borderRadius: '10px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 0.2s',
+  };
+
+  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#05060f', color: '#94a3b8' }}>Kitap yükleniyor...</div>;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: bgColor, color: textColor, transition: 'background 0.4s, color 0.4s' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: bgColor, color: textColor, transition: 'background 0.4s' }}>
 
       {/* ── TOP BAR ── */}
       <div style={{
-        position: 'sticky', top: 0, zIndex: 20,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
-        padding: '10px 16px',
-        background: barBg, backdropFilter: 'blur(16px)',
-        borderBottom: `1px solid ${borderColor}`,
+        position: 'sticky', top: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px',
+        background: barBg, backdropFilter: 'blur(20px)', borderBottom: `1px solid ${borderColor}`
       }}>
-        {/* Left: Back + Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: '1 1 150px' }}>
-          <button onClick={() => navigate('/')} style={iconBtnStyle}>
-            <X size={20} />
-          </button>
-          <span style={{ fontWeight: 600, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
-            {book?.title}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+          <button onClick={() => navigate('/')} style={iconBtnStyle}><X size={24} /></button>
+          <span style={{ fontWeight: 800, fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{book?.title}</span>
         </div>
 
-        {/* Right: Tools */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', flex: '0 0 auto' }}>
-          {/* Zoom */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: controlBg, borderRadius: '10px', padding: '4px 8px' }}>
-            <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} style={iconBtnStyle}><ZoomOut size={16} /></button>
-            <span style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', minWidth: '36px', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
-            <button onClick={() => setScale(s => Math.min(2.5, s + 0.1))} style={iconBtnStyle}><ZoomIn size={16} /></button>
-          </div>
-
-          {/* Jump to page */}
-          <form onSubmit={handleJump} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: controlBg, borderRadius: '10px', padding: '4px 8px' }}>
-            <Search size={14} style={{ opacity: 0.6 }} />
-            <input
-              type="number"
-              value={jumpStr}
-              onChange={e => setJumpStr(e.target.value)}
-              placeholder={String(pageNumber)}
-              style={{
-                width: '44px', background: 'transparent', border: 'none', outline: 'none',
-                color: textColor, fontSize: '13px', fontWeight: 700, textAlign: 'center'
-              }}
-            />
-            <span style={{ fontSize: '12px', opacity: 0.5 }}>/ {numPages}</span>
-          </form>
-
-          {/* Theme */}
-          <button onClick={toggleTheme} style={iconBtnStyle} title="Tema Değiştir">
-            {theme === 'dark' ? <Moon size={18} /> : theme === 'sepia' ? <Coffee size={18} /> : <Sun size={18} />}
-          </button>
-
-          {/* Fullscreen */}
-          <button onClick={toggleFullscreen} style={iconBtnStyle} title="Tam Ekran">
-            <Maximize2 size={18} />
-          </button>
-
-          {/* Notes */}
-          <button
-            onClick={() => setIsNotesOpen(!isNotesOpen)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '6px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer',
-              fontWeight: 600, fontSize: '13px',
-              background: isNotesOpen ? 'linear-gradient(135deg, #6366f1, #a855f7)' : controlBg,
-              color: isNotesOpen ? 'white' : textColor,
-              transition: 'all 0.2s',
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Drawing Toggle */}
+          <button 
+            onClick={() => setIsDrawingMode(!isDrawingMode)} 
+            style={{ 
+              ...iconBtnStyle, 
+              background: isDrawingMode ? '#6366f1' : controlBg, 
+              color: isDrawingMode ? 'white' : 'inherit',
+              boxShadow: isDrawingMode ? '0 0 15px rgba(99,102,241,0.4)' : 'none'
             }}
           >
-            <StickyNote size={16} />
-            <span>Notlar</span>
+            <Pencil size={20} />
+          </button>
+
+          <button onClick={toggleTheme} style={{ ...iconBtnStyle, background: controlBg }}>
+            {theme === 'dark' ? <Moon size={20} /> : theme === 'sepia' ? <Coffee size={20} /> : <Sun size={20} />}
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: controlBg, borderRadius: '12px', padding: '4px 10px' }}>
+            <button onClick={() => setScale(s => Math.max(0.4, s - 0.1))} style={iconBtnStyle}><ZoomOut size={16} /></button>
+            <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', minWidth: '35px', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+            <button onClick={() => setScale(s => Math.min(3, s + 0.1))} style={iconBtnStyle}><ZoomIn size={16} /></button>
+          </div>
+
+          <button 
+            onClick={() => setIsNotesOpen(!isNotesOpen)} 
+            style={{ 
+              ...iconBtnStyle, 
+              background: isNotesOpen ? '#a855f7' : controlBg, 
+              color: isNotesOpen ? 'white' : 'inherit' 
+            }}
+          >
+            <StickyNote size={20} />
           </button>
         </div>
       </div>
 
+      {/* ── DRAWING TOOLBAR (Floating) ── */}
+      {isDrawingMode && (
+        <div style={{
+          position: 'fixed', left: '50%', transform: 'translateX(-50%)', top: '75px', zIndex: 100,
+          background: 'rgba(5, 6, 15, 0.9)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '20px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '16px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.5)', animation: 'slideDown 0.3s ease'
+        }}>
+           <style>{`@keyframes slideDown { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }`}</style>
+          
+           {/* Color Swatches */}
+           <div style={{ display: 'flex', gap: '6px' }}>
+             {colors.map(c => (
+               <button 
+                key={c}
+                onClick={() => { setBrushColor(c); setIsEraser(false); }}
+                style={{
+                  width: '24px', height: '24px', borderRadius: '50%', background: c, border: brushColor === c && !isEraser ? '2px solid white' : '2px solid transparent',
+                  cursor: 'pointer', boxSizing: 'border-box'
+                }}
+               />
+             ))}
+           </div>
+
+           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+
+           <div style={{ display: 'flex', gap: '8px' }}>
+             <button 
+               onClick={() => setIsEraser(false)} 
+               style={{ ...iconBtnStyle, color: !isEraser ? '#6366f1' : 'white', opacity: !isEraser ? 1 : 0.5 }}
+             >
+               <Pencil size={18} />
+             </button>
+             <button 
+               onClick={() => setIsEraser(true)} 
+               style={{ ...iconBtnStyle, color: isEraser ? '#6366f1' : 'white', opacity: isEraser ? 1 : 0.5 }}
+             >
+               <Eraser size={18} />
+             </button>
+           </div>
+
+           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+
+           <button 
+             onClick={() => { if(window.confirm('Tüm çizimleri temizle?')) { setDrawingData('[]'); saveDrawing('[]'); }}}
+             style={{ ...iconBtnStyle, color: '#f43f5e' }}
+           >
+             <Trash2 size={18} />
+           </button>
+        </div>
+      )}
+
       {/* ── PDF AREA ── */}
       <div style={{ 
-        flex: 1, 
-        overflow: 'auto', 
-        display: 'flex', 
+        flex: 1, overflow: 'auto', display: 'flex', 
         justifyContent: scale > 1 ? 'flex-start' : 'center', 
-        alignItems: 'flex-start', 
-        padding: '20px 16px',
-        WebkitOverflowScrolling: 'touch' // Smooth scroll for iPad
+        alignItems: 'flex-start', padding: '40px 16px',
+        WebkitOverflowScrolling: 'touch'
       }}>
         <div style={{ 
-          boxShadow: theme === 'dark' ? '0 8px 48px rgba(0,0,0,0.7)' : '0 4px 24px rgba(0,0,0,0.15)', 
-          borderRadius: '4px', 
-          overflow: 'hidden',
-          minWidth: 'fit-content' // Crucial for flex-start horizontal scrolling
+          position: 'relative',
+          boxShadow: theme === 'dark' ? '0 20px 60px rgba(0,0,0,0.8)' : '0 10px 30px rgba(0,0,0,0.1)', 
+          borderRadius: '4px', background: 'white', minWidth: 'fit-content'
         }}>
           <Document
             file={book?.file_url}
             onLoadSuccess={onDocumentLoadSuccess}
-            loading={<div style={{ padding: '40px 20px', color: '#94a3b8', textAlign: 'center' }}>PDF yükleniyor...</div>}
-            error={<div style={{ padding: '40px 20px', color: '#ef4444', textAlign: 'center', fontWeight: 600 }}>PDF yüklenemedi.</div>}
+            loading={<div style={{ padding: '60px', color: '#64748b' }}>PDF Hazırlanıyor...</div>}
           >
-            <Page
-              pageNumber={pageNumber}
-              scale={scale}
-              width={containerWidth}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-            />
+            <div style={{ position: 'relative' }}>
+              <Page
+                pageNumber={pageNumber}
+                scale={scale}
+                width={containerWidth}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                onRenderSuccess={(page) => {
+                  // Get actual rendered dimensions
+                  const viewport = page.getViewport({ scale: 1 });
+                  setPageDimensions({ width: viewport.width, height: viewport.height });
+                }}
+              />
+              <DrawingLayer
+                width={containerWidth * scale}
+                height={(containerWidth * scale) * (pageDimensions.height / pageDimensions.width)}
+                isActive={isDrawingMode}
+                color={brushColor}
+                brushSize={isEraser ? 20 : brushSize}
+                isEraser={isEraser}
+                initialData={drawingData}
+                onSave={saveDrawing}
+              />
+            </div>
           </Document>
         </div>
       </div>
 
       {/* ── BOTTOM BAR ── */}
       <div style={{
-        position: 'sticky', bottom: 0, zIndex: 20,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
-        padding: '12px 20px',
-        background: barBg, backdropFilter: 'blur(16px)',
-        borderTop: `1px solid ${borderColor}`,
+        position: 'sticky', bottom: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 24px',
+        background: barBg, backdropFilter: 'blur(20px)', borderTop: `1px solid ${borderColor}`
       }}>
         <button
           onClick={() => changePage(-1)}
           disabled={pageNumber <= 1}
           style={{ ...navBtnStyle, opacity: pageNumber <= 1 ? 0.3 : 1, background: controlBg, color: textColor }}
         >
-          <ChevronLeft size={20} />
-          <span style={{ fontSize: '14px', fontWeight: 600 }}>Önceki</span>
+          <ChevronLeft size={20} /> <span>Geri</span>
         </button>
 
-        <div style={{ flex: 1, maxWidth: '280px', textAlign: 'center' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.6, marginBottom: '6px', letterSpacing: '0.05em' }}>
+        <div style={{ flex: 1, maxWidth: '300px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', fontWeight: 800, opacity: 0.6, marginBottom: '8px', letterSpacing: '0.1em' }}>
             SAYFA {pageNumber} / {numPages}
           </div>
-          <div style={{ height: '6px', background: 'rgba(128,128,128,0.2)', borderRadius: '3px', overflow: 'hidden' }}>
+          <div style={{ height: '6px', background: 'rgba(128,128,128,0.15)', borderRadius: '3px', overflow: 'hidden' }}>
             <div style={{
-              height: '100%',
-              width: `${(pageNumber / (numPages || 1)) * 100}%`,
-              background: 'linear-gradient(90deg, #6366f1, #a855f7)',
-              borderRadius: '3px',
-              transition: 'width 0.4s ease'
+              height: '100%', width: `${(pageNumber / (numPages || 1)) * 100}%`,
+              background: 'linear-gradient(90deg, #6366f1, #a855f7)', borderRadius: '3px', transition: 'width 0.3s ease'
             }} />
           </div>
         </div>
@@ -237,33 +315,17 @@ const Reader = () => {
           disabled={pageNumber >= numPages}
           style={{ ...navBtnStyle, opacity: pageNumber >= numPages ? 0.3 : 1, background: controlBg, color: textColor }}
         >
-          <span style={{ fontSize: '14px', fontWeight: 600 }}>Sonraki</span>
-          <ChevronRight size={20} />
+          <span>İleri</span> <ChevronRight size={20} />
         </button>
       </div>
 
-      {/* Notes Drawer */}
-      <NotesDrawer
-        isOpen={isNotesOpen}
-        onClose={() => setIsNotesOpen(false)}
-        bookId={bookId}
-        pageNumber={pageNumber}
-      />
+      <NotesDrawer isOpen={isNotesOpen} onClose={() => setIsNotesOpen(false)} bookId={bookId} pageNumber={pageNumber} />
     </div>
   );
 };
 
-const iconBtnStyle = {
-  background: 'none', border: 'none', cursor: 'pointer',
-  color: 'inherit', padding: '6px', borderRadius: '8px',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  opacity: 0.8, transition: 'opacity 0.2s',
-};
-
 const navBtnStyle = {
-  display: 'flex', alignItems: 'center', gap: '6px',
-  padding: '10px 18px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-  transition: 'all 0.2s', fontFamily: 'inherit',
+  display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '14px', border: 'none', cursor: 'pointer', fontWeight: 700
 };
 
 export default Reader;
