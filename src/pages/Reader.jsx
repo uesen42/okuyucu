@@ -235,6 +235,16 @@ const Reader = () => {
     transition: 'all 0.2s',
   };
 
+  const styles = {
+    canvasWrapper: {
+      position: 'relative',
+      display: 'inline-block',
+      margin: '0 auto',
+      boxShadow: '0 30px 60px rgba(0,0,0,0.5)',
+      background: 'white'
+    }
+  };
+
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#05060f', color: '#94a3b8' }}>Kitap yükleniyor...</div>;
 
   return (
