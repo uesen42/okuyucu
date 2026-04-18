@@ -168,8 +168,21 @@ const Reader = () => {
       </div>
 
       {/* ── PDF AREA ── */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 16px' }}>
-        <div style={{ boxShadow: theme === 'dark' ? '0 8px 48px rgba(0,0,0,0.7)' : '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '4px', overflow: 'hidden' }}>
+      <div style={{ 
+        flex: 1, 
+        overflow: 'auto', 
+        display: 'flex', 
+        justifyContent: scale > 1 ? 'flex-start' : 'center', 
+        alignItems: 'flex-start', 
+        padding: '20px 16px',
+        WebkitOverflowScrolling: 'touch' // Smooth scroll for iPad
+      }}>
+        <div style={{ 
+          boxShadow: theme === 'dark' ? '0 8px 48px rgba(0,0,0,0.7)' : '0 4px 24px rgba(0,0,0,0.15)', 
+          borderRadius: '4px', 
+          overflow: 'hidden',
+          minWidth: 'fit-content' // Crucial for flex-start horizontal scrolling
+        }}>
           <Document
             file={book?.file_url}
             onLoadSuccess={onDocumentLoadSuccess}

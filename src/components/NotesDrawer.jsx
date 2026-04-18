@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
-import { X, Save, StickyNote, MessageSquare, History } from 'lucide-react';
+import { X, StickyNote, History } from 'lucide-react';
 
 const NotesDrawer = ({ isOpen, onClose, bookId, pageNumber }) => {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (isOpen && bookId && pageNumber) {
@@ -31,6 +39,7 @@ const NotesDrawer = ({ isOpen, onClose, bookId, pageNumber }) => {
   };
 
   const saveNote = async (content) => {
+    if (!bookId) return;
     setSaving(true);
     const { error } = await supabase
       .from('notes')
@@ -45,9 +54,8 @@ const NotesDrawer = ({ isOpen, onClose, bookId, pageNumber }) => {
     setSaving(false);
   };
 
-  // Debounce saving
   useEffect(() => {
-    if (loading) return;
+    if (loading || !isOpen) return;
     const timer = setTimeout(() => {
       saveNote(note);
     }, 1000);
@@ -56,62 +64,185 @@ const NotesDrawer = ({ isOpen, onClose, bookId, pageNumber }) => {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-y-0 right-0 w-full md:w-[400px] z-50 animate-fade-in flex">
-      {/* Backdrop for mobile */}
-      <div className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      
-      <div className="flex-1 glass border-l border-white/10 flex flex-col relative z-10 shadow-2xl">
-        {/* Header */}
-        <div className="p-6 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-accent-primary/20 rounded-lg text-accent-primary">
-              <StickyNote size={20} />
-            </div>
+  const isMobile = windowWidth < 768;
+
+  const styles = {
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      zIndex: 9999,
+      display: 'flex',
+      justifyContent: 'flex-end',
+      pointerEvents: 'none'
+    },
+    backdrop: {
+      position: 'absolute',
+      inset: 0,
+      background: 'rgba(0, 0, 0, 0.5)',
+      backdropFilter: 'blur(4px)',
+      pointerEvents: 'auto',
+    },
+    drawer: {
+      width: isMobile ? '100%' : '400px',
+      height: '100%',
+      background: 'rgba(5, 6, 15, 0.98)',
+      backdropFilter: 'blur(30px)',
+      borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+      zIndex: 10000,
+      pointerEvents: 'auto',
+      boxShadow: '-20px 0 50px rgba(0,0,0,0.6)',
+      animation: 'slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
+    },
+    header: {
+      padding: '24px',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    iconBox: {
+      padding: '10px',
+      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2))',
+      color: '#a855f7',
+      borderRadius: '12px',
+      display: 'flex'
+    },
+    contentArea: {
+      padding: '24px',
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '20px'
+    },
+    textarea: {
+      flex: 1,
+      background: 'rgba(255, 255, 255, 0.04)',
+      border: '1px solid rgba(255, 255, 255, 0.15)',
+      borderRadius: '20px',
+      padding: '20px',
+      color: '#f8fafc',
+      fontSize: '16px',
+      lineHeight: '1.7',
+      resize: 'none',
+      outline: 'none',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      transition: 'all 0.3s ease',
+      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
+    },
+    status: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 8px'
+    },
+    saveBadge: {
+       display: 'flex', 
+       alignItems: 'center', 
+       gap: '8px', 
+       fontSize: '11px', 
+       fontWeight: 800, 
+       color: saving ? '#fbbf24' : '#10b981',
+       textTransform: 'uppercase', 
+       letterSpacing: '0.1em'
+    },
+    footer: {
+      padding: '24px',
+      background: 'rgba(255, 255, 255, 0.03)',
+      fontSize: '12px',
+      color: '#64748b',
+      textAlign: 'center',
+      lineHeight: '1.5',
+      borderTop: '1px solid rgba(255, 255, 255, 0.05)'
+    }
+  };
+
+  const drawerContent = (
+    <div style={styles.overlay}>
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+      `}</style>
+      <div style={styles.backdrop} onClick={onClose} />
+      <div style={styles.drawer}>
+        <div style={styles.header}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={styles.iconBox}><StickyNote size={24} /></div>
             <div>
-              <h3 className="font-bold text-lg">Notlarım</h3>
-              <p className="text-xs text-text-secondary">Sayfa {pageNumber}</p>
+              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'white' }}>Notlarım</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#94a3b8', fontWeight: 500 }}>Sayfa {pageNumber}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full">
+          <button 
+            onClick={onClose}
+            style={{ 
+              padding: '10px', background: 'rgba(255,255,255,0.05)', border: 'none', 
+              color: 'white', cursor: 'pointer', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >
             <X size={20} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 p-6 flex flex-col gap-4">
+        <div style={styles.contentArea}>
           {loading ? (
-            <div className="text-center py-10 text-text-secondary text-sm">Notlar yükleniyor...</div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+              Notlar yükleniyor...
+            </div>
           ) : (
             <>
               <textarea
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-accent-primary resize-none placeholder:text-white/20 leading-relaxed"
-                placeholder="Bu sayfa için bir şeyler yazın..."
+                style={styles.textarea}
+                placeholder="Bu sayfa için önemli notlarını buraya bırak..."
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#6366f1';
+                  e.target.style.background = 'rgba(255,255,255,0.06)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'rgba(255,255,255,0.15)';
+                  e.target.style.background = 'rgba(255,255,255,0.04)';
+                }}
               />
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-text-secondary font-bold px-1">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${saving ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-                  {saving ? 'Kaydediliyor...' : 'Senkronize Edildi'}
+              <div style={styles.status}>
+                <div style={styles.saveBadge}>
+                  <div style={{ 
+                    width: '8px', height: '8px', borderRadius: '50%', 
+                    background: saving ? '#fbbf24' : '#10b981',
+                    boxShadow: saving ? '0 0 10px #fbbf24' : '0 0 10px #10b981'
+                  }} />
+                  {saving ? 'Kaydediliyor...' : 'Bulutla Senkronize'}
                 </div>
-                <div className="flex items-center gap-3">
-                   <button className="hover:text-accent-primary transition-colors flex items-center gap-1">
-                     <History size={12} /> Geçmiş
-                   </button>
-                </div>
+                <button style={{ 
+                  background: 'transparent', border: 'none', color: '#64748b', 
+                  display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', 
+                  fontWeight: 600, cursor: 'pointer', hover: { color: 'white' }
+                }}>
+                  <History size={14} /> Geçmiş
+                </button>
               </div>
             </>
           )}
         </div>
 
-        {/* Footer info (Premium touch) */}
-        <div className="p-6 bg-white/5 text-[11px] text-text-secondary text-center italic">
-          Notlarınız iPad ve PC arasında anlık olarak senkronize edilir.
+        <div style={styles.footer}>
+          Notlarınız iPad ve PC'niz arasında <br/> 
+          <span style={{ color: '#94a3b8' }}>otomatik olarak senkronize edilir.</span>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(drawerContent, document.body);
 };
 
 export default NotesDrawer;
