@@ -4,10 +4,89 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { supabase } from '../lib/supabase';
 import { 
   ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, X, Sun, Moon, 
-  Coffee, Search, StickyNote, Pencil, Eraser, Trash2, Palette 
+  Coffee, Search, StickyNote, Pencil, Eraser, Trash2, Palette, Grid, List 
 } from 'lucide-react';
 import NotesDrawer from '../components/NotesDrawer';
 import DrawingLayer from '../components/DrawingLayer';
+
+const ReaderSidebar = ({ isOpen, onClose, numPages, onJump, bookId, containerWidth, theme }) => {
+  const [activeTab, setActiveTab] = useState('thumbnails'); // 'thumbnails' | 'all-notes'
+  const [allNotes, setAllNotes] = useState([]);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'all-notes') {
+      fetchBookNotes();
+    }
+  }, [isOpen, activeTab]);
+
+  const fetchBookNotes = async () => {
+    const { data } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('book_id', bookId)
+      .order('page_number', { ascending: true });
+    setAllNotes(data || []);
+  };
+
+  if (!isOpen) return null;
+
+  const styles = {
+    overlay: { position: 'fixed', inset: 0, zIndex: 2000, display: 'flex' },
+    backdrop: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' },
+    sidebar: {
+      width: '320px', height: '100%', background: theme === 'dark' ? '#0a0b1e' : '#f8fafc',
+      borderRight: '1px solid rgba(255,255,255,0.1)', position: 'relative', zIndex: 10,
+      display: 'flex', flexDirection: 'column', boxShadow: '10px 0 30px rgba(0,0,0,0.3)',
+      animation: 'slideInLeft 0.3s ease'
+    },
+    header: { padding: '20px', borderBottom: '1px solid rgba(128,128,128,0.1)', display: 'flex', gap: '8px' },
+    tabBtn: (active) => ({
+      flex: 1, padding: '8px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+      background: active ? '#6366f1' : 'transparent', color: active ? 'white' : '#64748b'
+    }),
+    scrollArea: { flex: 1, overflowY: 'auto', padding: '16px' }
+  };
+
+  return (
+    <div style={styles.overlay}>
+      <style>{`@keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }`}</style>
+      <div style={styles.backdrop} onClick={onClose} />
+      <div style={styles.sidebar}>
+        <div style={styles.header}>
+          <button style={styles.tabBtn(activeTab === 'thumbnails')} onClick={() => setActiveTab('thumbnails')}><Grid size={18} /> Önizleme</button>
+          <button style={styles.tabBtn(activeTab === 'all-notes')} onClick={() => setActiveTab('all-notes')}><List size={18} /> Tüm Notlar</button>
+        </div>
+
+        <div style={styles.scrollArea}>
+          {activeTab === 'thumbnails' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {Array.from({ length: numPages }).map((_, i) => (
+                <div key={i} onClick={() => { onJump(i + 1); onClose(); }} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                  <div style={{ aspectRatio: '0.7', background: 'rgba(128,128,128,0.1)', borderRadius: '4px', overflow: 'hidden', border: '1px solid transparent' }} 
+                       onMouseEnter={(e) => e.target.style.borderColor = '#6366f1'}>
+                    <Page pageNumber={i + 1} width={130} renderTextLayer={false} renderAnnotationLayer={false} />
+                  </div>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}>{i + 1}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {allNotes.length === 0 ? <p style={{ textAlign: 'center', opacity: 0.5 }}>Henüz not yok.</p> :
+               allNotes.map(n => (
+                <div key={n.id} onClick={() => { onJump(n.page_number); onClose(); }} 
+                     style={{ padding: '12px', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '12px', cursor: 'pointer' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#6366f1', marginBottom: '4px' }}>SAYFA {n.page_number}</div>
+                  <div style={{ fontSize: '13px', opacity: 0.8, whiteSpace: 'pre-wrap' }}>{n.content}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -24,6 +103,8 @@ const Reader = () => {
   const [jumpStr, setJumpStr] = useState('');
   const [containerWidth, setContainerWidth] = useState(600);
   const [pageDimensions, setPageDimensions] = useState({ width: 600, height: 848 });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sessionStartTime] = useState(Date.now());
 
   // Drawing States
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -90,6 +171,25 @@ const Reader = () => {
       return () => clearTimeout(t);
     }
   }, [pageNumber, book, loading]);
+
+  useEffect(() => {
+    // Record reading session duration on unmount or every 2 mins
+    const recordSession = async () => {
+      const duration = Math.round((Date.now() - sessionStartTime) / 60000);
+      if (duration > 0) {
+        await supabase.from('reading_sessions').insert({
+          book_id: bookId,
+          duration_minutes: duration
+        });
+      }
+    };
+
+    const interval = setInterval(recordSession, 120000); // Pulse every 2 mins
+    return () => {
+      clearInterval(interval);
+      recordSession();
+    };
+  }, [bookId, sessionStartTime]);
 
   const onDocumentLoadSuccess = ({ numPages }) => {
     setNumPages(numPages);
@@ -183,6 +283,13 @@ const Reader = () => {
             }}
           >
             <StickyNote size={20} />
+          </button>
+
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            style={{ ...iconBtnStyle, background: controlBg }}
+          >
+            <Grid size={20} />
           </button>
         </div>
       </div>
@@ -350,6 +457,16 @@ const Reader = () => {
       </div>
 
       <NotesDrawer isOpen={isNotesOpen} onClose={() => setIsNotesOpen(false)} bookId={bookId} pageNumber={pageNumber} />
+      
+      <ReaderSidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        numPages={numPages}
+        onJump={(p) => setPageNumber(p)}
+        bookId={bookId}
+        containerWidth={containerWidth}
+        theme={theme}
+      />
     </div>
   );
 };

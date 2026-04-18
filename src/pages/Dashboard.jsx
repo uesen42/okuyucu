@@ -10,9 +10,12 @@ const Dashboard = () => {
   const [password, setPassword] = useState(localStorage.getItem('appPassword') || '');
   const [tempPass, setTempPass] = useState('');
   const [books, setBooks] = useState([]);
+  const [stats, setStats] = useState({ total_minutes: 0, total_books: 0 });
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedTag, setSelectedTag] = useState('Hepsi');
+  const [newTags, setNewTags] = useState('');
   const navigate = useNavigate();
 
   const masterPassword = import.meta.env.VITE_APP_PASSWORD;
@@ -20,6 +23,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (password === masterPassword) {
       fetchBooks();
+      fetchGlobalStats();
     }
   }, [password]);
 
@@ -35,6 +39,15 @@ const Dashboard = () => {
     if (error) console.error('Error fetching books:', error);
     else setBooks(data || []);
     setLoading(false);
+  };
+
+  const fetchGlobalStats = async () => {
+    const { data } = await supabase
+      .from('reading_sessions')
+      .select('duration_minutes');
+    
+    const total = data?.reduce((acc, s) => acc + (s.duration_minutes || 0), 0) || 0;
+    setStats(prev => ({ ...prev, total_minutes: total }));
   };
 
   const handleLogin = () => {
@@ -108,11 +121,13 @@ const Dashboard = () => {
           file_url: publicUrl,
           storage_path: filePath,
           total_pages: 0,
-          cover_url: coverUrl
+          cover_url: coverUrl,
+          tags: newTags.split(',').map(tag => tag.trim()).filter(Boolean)
         }]);
 
       if (dbError) throw dbError;
       
+      setNewTags('');
       fetchBooks();
     } catch (error) {
       alert('Yükleme hatası: ' + error.message);
@@ -297,18 +312,34 @@ const Dashboard = () => {
             <span style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.5px' }}>Library</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {uploading && (
+              <input 
+                type="text" 
+                placeholder="Etiketler (virgülle ayırın)" 
+                style={{ ...styles.input, marginBottom: 0, width: '200px', fontSize: '13px', padding: '8px 12px' }}
+                value={newTags}
+                onChange={(e) => setNewTags(e.target.value)}
+              />
+            )}
             <label style={{ 
               ...styles.btnPrimary, 
               width: 'auto', 
               padding: '10px 20px', 
               fontSize: '14px',
-              opacity: uploading ? 0.7 : 1,
-              pointerEvents: uploading ? 'none' : 'auto'
+              opacity: uploading ? 0.9 : 1,
+              pointerEvents: uploading && !newTags ? 'none' : 'auto'
             }}>
               <Upload size={18} />
-              <span>{uploading ? 'Yükleniyor...' : 'Kitap Ekle'}</span>
-              <input type="file" style={{ display: 'none' }} accept=".pdf" onChange={handleFileUpload} />
+              <span>{uploading ? 'Şimdi Yükle' : 'Kitap Ekle'}</span>
+              {!uploading ? (
+                <button 
+                   onClick={(e) => { e.preventDefault(); setUploading(true); }} 
+                   style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} 
+                />
+              ) : (
+                <input type="file" style={{ display: 'none' }} accept=".pdf" onChange={handleFileUpload} />
+              )}
             </label>
             <button 
               onClick={() => { localStorage.removeItem('appPassword'); setPassword(''); }}
@@ -321,10 +352,37 @@ const Dashboard = () => {
       </header>
 
       <main style={styles.section}>
-        {/* WELCOME AREA */}
-        <div style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '8px' }}>Merhaba,</h2>
-          <p style={{ color: '#94a3b8', fontSize: '16px' }}>Okuma listenizde toplam {books.length} eser bulunuyor.</p>
+        {/* WELCOME AREA & STATS */}
+        <div style={{ marginBottom: '48px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '24px' }}>
+          <div>
+            <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '8px' }}>Merhaba,</h2>
+            <p style={{ color: '#94a3b8', fontSize: '16px' }}>Okuma listenizde toplam {books.length} eser bulunuyor.</p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '16px 24px', borderRadius: '20px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+              <div style={{ fontSize: '12px', color: '#6366f1', fontWeight: '800', textTransform: 'uppercase', marginBottom: '4px' }}>Toplam Okuma</div>
+              <div style={{ fontSize: '24px', fontWeight: '800' }}>{Math.floor(stats.total_minutes / 60)}s {stats.total_minutes % 60}dk</div>
+            </div>
+          </div>
+        </div>
+
+        {/* TAG FILTER */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '32px', overflowX: 'auto', paddingBottom: '8px' }}>
+          {['Hepsi', ...Array.from(new Set(books.flatMap(b => b.tags || [])))].map(tag => (
+            <button
+              key={tag}
+              onClick={() => setSelectedTag(tag)}
+              style={{
+                padding: '8px 16px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                background: selectedTag === tag ? '#6366f1' : 'rgba(255,255,255,0.05)',
+                color: selectedTag === tag ? 'white' : '#94a3b8',
+                fontSize: '13px', fontWeight: '700', transition: 'all 0.2s', whiteSpace: 'nowrap'
+              }}
+            >
+              {tag}
+            </button>
+          ))}
         </div>
 
         {/* FEATURED: CONTINUE READING */}
@@ -378,7 +436,7 @@ const Dashboard = () => {
           </div>
         ) : (
           <div style={styles.bookGrid}>
-            {books.map(book => (
+            {books.filter(b => selectedTag === 'Hepsi' || (b.tags && b.tags.includes(selectedTag))).map(book => (
               <div 
                 key={book.id} 
                 style={styles.bookCard}
@@ -399,9 +457,14 @@ const Dashboard = () => {
                 </div>
                 
                 <div style={{ padding: '4px' }}>
-                  <h5 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '8px', lineHeight: '1.4', lineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <h5 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '4px', lineHeight: '1.4', lineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {book.title}
                   </h5>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                    {book.tags?.map(t => (
+                      <span key={t} style={{ fontSize: '9px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>#{t}</span>
+                    ))}
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#6366f1' }}>% {Math.round((book.current_page / (book.total_pages || 1)) * 100)}</span>
                      <span style={{ fontSize: '11px', color: '#64748b' }}>{book.total_pages || '?'} Sayfa</span>
