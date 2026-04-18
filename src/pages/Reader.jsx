@@ -189,25 +189,55 @@ const Reader = () => {
 
       {/* ── DRAWING TOOLBAR (Floating) ── */}
       {isDrawingMode && (
-        <div style={{
-          position: 'fixed', left: '50%', transform: 'translateX(-50%)', top: '75px', zIndex: 100,
-          background: 'rgba(5, 6, 15, 0.9)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: '20px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '16px',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.5)', animation: 'slideDown 0.3s ease'
-        }}>
+        <div 
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed', left: '50%', transform: 'translateX(-50%)', top: '75px', zIndex: 1000,
+            background: 'rgba(5, 6, 15, 0.95)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '24px', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '20px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.6)', animation: 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+        >
            <style>{`@keyframes slideDown { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }`}</style>
           
            {/* Color Swatches */}
-           <div style={{ display: 'flex', gap: '6px' }}>
+           <div style={{ display: 'flex', gap: '8px' }}>
              {colors.map(c => (
                <button 
                 key={c}
                 onClick={() => { setBrushColor(c); setIsEraser(false); }}
                 style={{
-                  width: '24px', height: '24px', borderRadius: '50%', background: c, border: brushColor === c && !isEraser ? '2px solid white' : '2px solid transparent',
-                  cursor: 'pointer', boxSizing: 'border-box'
+                  width: '26px', height: '26px', borderRadius: '50%', background: c, 
+                  border: brushColor === c && !isEraser ? '2px solid white' : '2px solid transparent',
+                  cursor: 'pointer', boxSizing: 'border-box', boxShadow: brushColor === c && !isEraser ? `0 0 10px ${c}` : 'none',
+                  transition: 'transform 0.2s'
                 }}
+                onMouseEnter={(e) => e.target.style.transform = 'scale(1.15)'}
+                onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
                />
+             ))}
+           </div>
+
+           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+
+           {/* Size Selection */}
+           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+             {[3, 7, 14].map(size => (
+               <button
+                 key={size}
+                 onClick={() => setBrushSize(size)}
+                 style={{
+                   background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                   opacity: brushSize === size ? 1 : 0.4, transition: 'opacity 0.2s'
+                 }}
+               >
+                 <div style={{ 
+                   width: `${size + 4}px`, height: `${size + 4}px`, 
+                   borderRadius: '50%', background: 'white' 
+                 }} />
+               </button>
              ))}
            </div>
 
@@ -216,15 +246,15 @@ const Reader = () => {
            <div style={{ display: 'flex', gap: '8px' }}>
              <button 
                onClick={() => setIsEraser(false)} 
-               style={{ ...iconBtnStyle, color: !isEraser ? '#6366f1' : 'white', opacity: !isEraser ? 1 : 0.5 }}
+               style={{ ...iconBtnStyle, color: !isEraser ? '#6366f1' : 'white', opacity: !isEraser ? 1 : 0.5, background: !isEraser ? 'rgba(99, 102, 241, 0.1)' : 'transparent' }}
              >
-               <Pencil size={18} />
+               <Pencil size={20} />
              </button>
              <button 
                onClick={() => setIsEraser(true)} 
-               style={{ ...iconBtnStyle, color: isEraser ? '#6366f1' : 'white', opacity: isEraser ? 1 : 0.5 }}
+               style={{ ...iconBtnStyle, color: isEraser ? '#6366f1' : 'white', opacity: isEraser ? 1 : 0.5, background: isEraser ? 'rgba(99, 102, 241, 0.1)' : 'transparent' }}
              >
-               <Eraser size={18} />
+               <Eraser size={20} />
              </button>
            </div>
 
@@ -274,7 +304,7 @@ const Reader = () => {
                 height={(containerWidth * scale) * (pageDimensions.height / pageDimensions.width)}
                 isActive={isDrawingMode}
                 color={brushColor}
-                brushSize={isEraser ? 20 : brushSize}
+                brushSize={isEraser ? brushSize * 4 : brushSize}
                 isEraser={isEraser}
                 initialData={drawingData}
                 onSave={saveDrawing}
