@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { supabase } from '../lib/supabase';
@@ -97,6 +97,7 @@ const Reader = () => {
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
+  const containerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('readerTheme') || 'dark');
