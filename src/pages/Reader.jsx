@@ -9,6 +9,9 @@ import {
 import NotesDrawer from '../components/NotesDrawer';
 import DrawingLayer from '../components/DrawingLayer';
 
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
 const ReaderSidebar = ({ isOpen, onClose, numPages, onJump, bookId, containerWidth, theme }) => {
   const [activeTab, setActiveTab] = useState('thumbnails'); // 'thumbnails' | 'all-notes'
   const [allNotes, setAllNotes] = useState([]);
